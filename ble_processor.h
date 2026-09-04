@@ -113,9 +113,9 @@ class MyBLEAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks {
                                 // Byte 0-1: Spänning (skalat med 100, dvs 0.01V per enhet)
                                 // Byte 2-3: Ström (skalat med 10, dvs 0.1A per enhet)
                                 // Byte 4-5: SoC (skalat med 10, dvs 0.1% per enhet)
-                                uint16_t raw_v = (decrypted[1] << 8) | decrypted[0];
-                                int16_t raw_c = (decrypted[3] << 8) | decrypted[2];
-                                uint16_t raw_soc = (decrypted[5] << 8) | decrypted[4];
+                                uint16_t raw_v = ((uint8_t)decrypted[1] << 8) | (uint8_t)decrypted[0];
+                                int16_t raw_c = ((uint8_t)decrypted[3] << 8) | (uint8_t)decrypted[2];
+                                uint16_t raw_soc = ((uint8_t)decrypted[5] << 8) | (uint8_t)decrypted[4];
 
                                 globalData.victron_voltage = raw_v / 100.0;
                                 globalData.victron_current = raw_c / 10.0;
@@ -126,9 +126,8 @@ class MyBLEAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks {
                                 // SmartSolar MPPT byte-mappning [esphome-victron_ble]:
                                 // Byte 0-1: Batterispänning (0.01V)
                                 // Byte 2-3: Laddström till batteri (0.1A)
-                                uint16_t raw_v = (decrypted[1] << 8) | decrypted[0];
-                                uint16_t raw_c = (decrypted[3] << 8) | decrypted[2];
-
+                                uint16_t raw_v = ((uint8_t)decrypted[1] << 8) | (uint8_t)decrypted[0];
+                                uint16_t raw_c = ((uint8_t)decrypted[3] << 8) | (uint8_t)decrypted[2];
                                 globalData.victron_voltage = raw_v / 100.0;
                                 globalData.victron_current = raw_c / 10.0;
                                 // MPPT skickar inte SoC, så vi rör inte den sensorn här
