@@ -299,6 +299,22 @@ if (xSemaphoreTake(dataMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
     xSemaphoreGive(dataMutex);
 }
 preferences.end();
+// Öppna flashminnet i läsläge för rollkonfigurationen
+preferences.begin("victron-roles", true);
+
+if (xSemaphoreTake(dataMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+    // Hämta sparade MAC-adresser (om inga finns returneras en tom sträng "")
+    globalData.shunt_mac = preferences.getString("shunt_mac", "").c_str();
+    globalData.mppt_mac  = preferences.getString("mppt_mac", "").c_str();
+    
+    xSemaphoreGive(dataMutex);
+    
+    USBSerial.print("Laddade Shunt MAC från flash: ");
+    USBSerial.println(globalData.shunt_mac.c_str());
+    USBSerial.print("Laddade MPPT MAC från flash: ");
+    USBSerial.println(globalData.mppt_mac.c_str());
+}
+preferences.end();
 
 // 2. Initiera det nya gränssnittet med flikar och inställningar
 init_gui();
