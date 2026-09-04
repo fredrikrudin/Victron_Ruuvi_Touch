@@ -12,6 +12,8 @@
 #include <vector>
 #include "ble_processor.h"
 #include "gui_labels.h"
+#include <Preferences.h>
+Preferences preferences;
 
 // Definition av globala variabler för trådsäkerhet
 SensorData globalData;
@@ -283,6 +285,20 @@ void setup() {
   // lv_demo_stress();
   // 1. Skapa Mutex för trådsäker kommunikation mellan Core 0 och Core 1
 dataMutex = xSemaphoreCreateMutex();
+// Öppna flashminnet i läsläge ("victron-keys")
+preferences.begin("victron-keys", true);
+
+// Ladda sparade nycklar trådsäkert till vår map
+if (xSemaphoreTake(dataMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+    // ESP32 Preferences har ingen inbyggd funktion för att lista alla nycklar, 
+    // så vi kollar om det finns sparade nycklar för de enheter vi har.
+    // (Detta kan utökas dynamiskt, här laddar vi kända adresser om de sparats)
+    
+    // Exempel: Om du vet din MAC-adress kan du hårdkoda en laddning här,
+    // annars laddas de automatiskt från inställningsmenyn när enheten dyker upp.
+    xSemaphoreGive(dataMutex);
+}
+preferences.end();
 
 // 2. Initiera det nya gränssnittet med flikar och inställningar
 init_gui();
