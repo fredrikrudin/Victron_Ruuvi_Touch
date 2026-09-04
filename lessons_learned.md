@@ -1,6 +1,6 @@
 # 📑 Lessons Learned - Waveshare ESP32-S3-Touch-LCD-4 v4 Development
 
-Detta dokument sammanställer de tekniska upptäckter, dolda hårdvarufällor och optimeringsstrategier som identifierades under utvecklingen av **CABBY v0.8** baserat på Waveshares officiella källkodsexempel.
+Detta dokument sammanställer de tekniska upptäckter, dolda hårdvarufällor och optimeringsstrategier som identifierades under utvecklingen baserat på Waveshares officiella källkodsexempel.
 
 ---
 
