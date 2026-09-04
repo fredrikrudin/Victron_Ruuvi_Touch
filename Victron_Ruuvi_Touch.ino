@@ -301,6 +301,13 @@ xTaskCreatePinnedToCore(
 }
 
 void loop() {
-  lv_timer_handler(); /* let the GUI do its work */
-  delay(5);
+    // Låt LVGL-grafikmotorn göra sitt arbete på Core 1
+    lv_timer_handler(); 
+    
+    // Hämta ny BLE-data och uppdatera textetiketterna på skärmen trådsäkert
+    update_gui_data();
+    
+    // En kort fördröjning för att ge FreeRTOS andrum
+    delay(5);
 }
+
