@@ -50,8 +50,8 @@ class MyBLEAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks {
             // 1. RUUVITAG
             if (companyId == 0x0499 && manuData.length() >= 18) {
                 if ((uint8_t)manuData[2] == 0x05) {
-                    int16_t raw_temp = ((uint8_t)manuData[3] << 8) | (uint8_t)manuData[4];
-                    uint16_t raw_hum = ((uint8_t)manuData[5] << 8) | (uint8_t)manuData[6];
+                        int16_t raw_temp = ((uint8_t)manuData[3] << 8) | (uint8_t)manuData[4];
+                        uint16_t raw_hum = ((uint8_t)manuData[5] << 8) | (uint8_t)manuData[6];
                     if (xSemaphoreTake(dataMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
                         globalData.ruuvi_temp = raw_temp * 0.005;
                         globalData.ruuvi_humidity = raw_hum * 0.0025;
