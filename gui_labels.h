@@ -1,24 +1,29 @@
 #pragma once
 #include <lvgl.h>
+#include <Preferences.h>
 #include <map>
 #include <string>
 #include <algorithm>
 #include "ble_processor.h"
 
+// Externa variabler deklarerade i huvudfilen
 extern SensorData globalData;
 extern SemaphoreHandle_t dataMutex;
 extern std::map<std::string, std::string> victronKeys;
 
+// LVGL UI-element
 static lv_obj_t *tabview;
 static lv_obj_t *tab_overview;
 static lv_obj_t *tab_settings;
 
+// Grafiska etiketter för realtidsdata
 static lv_obj_t *lbl_ruuvi_temp;
 static lv_obj_t *lbl_ruuvi_hum;
 static lv_obj_t *lbl_victron_volt;
 static lv_obj_t *lbl_victron_curr;
 static lv_obj_t *lbl_victron_soc;
 
+// Inställningskomponenter
 static lv_obj_t *list_devices;
 static lv_obj_t *kb;
 static lv_obj_t *ta_key;
@@ -26,18 +31,35 @@ static lv_obj_t *btn_set_shunt;
 static lv_obj_t *btn_set_mppt;
 static std::string selected_mac = "";
 
+// Tangentbordshändelse - Sparar bindkey till vald enhet
 static void kb_event_cb(lv_event_t * e) {
     lv_event_code_t code = lv_event_get_code(e);
     if(code == LV_EVENT_READY || code == LV_EVENT_CANCEL) {
         if(code == LV_EVENT_READY && !selected_mac.empty()) {
             const char * key_str = lv_textarea_get_text(ta_key);
+            
+            // En giltig Victron Bindkey är alltid exakt 32 tecken lång
             if(strlen(key_str) == 32) {
                 if(xSemaphoreTake(dataMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+                    // 1. Spara i det aktiva RAM-minnet (vår std::map)
                     victronKeys[selected_mac] = std::string(key_str);
                     xSemaphoreGive(dataMutex);
+                    
+                    // 2. Spara permanent i flashminnet (NVS)
+                    Preferences prefs;
+                    prefs.begin("victron-keys", false); // false = skrivläge
+                    
+                    // Preferences tillåter max 15 tecken som nyckelnamn, så vi rensar bort kolon
+                    std::string short_mac = selected_mac;
+                    short_mac.erase(std::remove(short_mac.begin(), short_mac.end(), ':'), short_mac.end());
+                    if(short_mac.length() > 15) short_mac = short_mac.substr(short_mac.length() - 15);
+                    
+                    prefs.putString(short_mac.c_str(), key_str);
+                    prefs.end();
                 }
             }
         }
+        // Göm tangentbordet och valknapparna igen
         lv_obj_add_flag(kb, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(ta_key, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(btn_set_shunt, LV_OBJ_FLAG_HIDDEN);
@@ -45,10 +67,20 @@ static void kb_event_cb(lv_event_t * e) {
     }
 }
 
+// Sparar vald enhet permanent som SmartShunt i flashminnet
 static void role_shunt_cb(lv_event_t * e) {
     if(!selected_mac.empty() && xSemaphoreTake(dataMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+        // 1. Spara i det aktiva RAM-minnet
         globalData.shunt_mac = selected_mac;
         xSemaphoreGive(dataMutex);
+        
+        // 2. Spara permanent i flashminnet (NVS)
+        Preferences prefs;
+        prefs.begin("victron-roles", false); // false = skrivläge
+        prefs.putString("shunt_mac", selected_mac.c_str());
+        prefs.end();
+        
+        // Göm menykomponenterna efter val
         lv_obj_add_flag(kb, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(ta_key, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(btn_set_shunt, LV_OBJ_FLAG_HIDDEN);
@@ -56,10 +88,20 @@ static void role_shunt_cb(lv_event_t * e) {
     }
 }
 
+// Sparar vald enhet permanent som MPPT i flashminnet
 static void role_mppt_cb(lv_event_t * e) {
     if(!selected_mac.empty() && xSemaphoreTake(dataMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+        // 1. Spara i det aktiva RAM-minnet
         globalData.mppt_mac = selected_mac;
         xSemaphoreGive(dataMutex);
+        
+        // 2. Spara permanent i flashminnet (NVS)
+        Preferences prefs;
+        prefs.begin("victron-roles", false); // false = skrivläge
+        prefs.putString("mppt_mac", selected_mac.c_str());
+        prefs.end();
+        
+        // Göm menykomponenterna efter val
         lv_obj_add_flag(kb, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(ta_key, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(btn_set_shunt, LV_OBJ_FLAG_HIDDEN);
@@ -67,9 +109,12 @@ static void role_mppt_cb(lv_event_t * e) {
     }
 }
 
+// När man klickar på en funnen Victron-enhet i inställningslistan
 static void device_click_cb(lv_event_t * e) {
     lv_obj_t * btn = lv_event_get_target(e);
     std::string full_text = lv_list_get_btn_text(list_devices, btn);
+    
+    // Ta bort "Victron: " prefixet från strängen för att extrahera ren MAC-adress
     size_t pos = full_text.find("Victron: ");
     if(pos != std::string::npos) {
         selected_mac = full_text.substr(9);
@@ -77,19 +122,23 @@ static void device_click_cb(lv_event_t * e) {
         selected_mac = full_text;
     }
 
+    // Återställ textrutan och visa dolda konfigurationsknappar samt tangentbord
     lv_textarea_set_text(ta_key, "");
     lv_obj_clear_flag(kb, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clear_flag(ta_key, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clear_flag(btn_set_shunt, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clear_flag(btn_set_mppt, LV_OBJ_FLAG_HIDDEN);
 }
-
+// Initiera det grafiska gränssnittet och dess flikar
 void init_gui(void) {
+    // Skapa flikvy (Tab View) med en toppmarginal på 50 pixlar för flikknapparna
     tabview = lv_tabview_create(lv_scr_act(), LV_DIR_TOP, 50);
     tab_overview = lv_tabview_add_tab(tabview, "📊 Översikt");
     tab_settings = lv_tabview_add_tab(tabview, "⚙️ Inställningar");
 
-    // --- ÖVERSIKT ---
+    // ==========================================
+    // --- BYGG FLIK 1: ÖVERSIKT --------------
+    // ==========================================
     lv_obj_t * title_ruuvi = lv_label_create(tab_overview);
     lv_label_set_text(title_ruuvi, "🌿 RuuviTag Sensor");
     lv_obj_align(title_ruuvi, LV_ALIGN_TOP_LEFT, 10, 5);
@@ -118,17 +167,22 @@ void init_gui(void) {
     lv_label_set_text(lbl_victron_soc, "Batterinivå: --- %");
     lv_obj_align(lbl_victron_soc, LV_ALIGN_TOP_LEFT, 20, 145);
 
-    // --- INSTÄLLNINGAR ---
+    // ==========================================
+    // --- BYGG FLIK 2: INSTÄLLNINGAR ---------
+    // ==========================================
     list_devices = lv_list_create(tab_settings);
     lv_obj_set_size(list_devices, 440, 130);
     lv_obj_align(list_devices, LV_ALIGN_TOP_MID, 0, 10);
 
+    // Textfält för Bindkey-inmatning
     ta_key = lv_textarea_create(tab_settings);
     lv_obj_set_size(ta_key, 440, 40);
     lv_obj_align(ta_key, LV_ALIGN_TOP_MID, 0, 150);
     lv_textarea_set_max_length(ta_key, 32);
+    lv_textarea_set_placeholder_text(ta_key, "Mata in 32-tecken Bindkey...");
     lv_obj_add_flag(ta_key, LV_OBJ_FLAG_HIDDEN);
 
+    // Knapp: Sätt som SmartShunt
     btn_set_shunt = lv_btn_create(tab_settings);
     lv_obj_set_size(btn_set_shunt, 140, 35);
     lv_obj_align(btn_set_shunt, LV_ALIGN_TOP_LEFT, 10, 195);
@@ -138,6 +192,7 @@ void init_gui(void) {
     lv_obj_add_event_cb(btn_set_shunt, role_shunt_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_add_flag(btn_set_shunt, LV_OBJ_FLAG_HIDDEN);
 
+    // Knapp: Sätt som MPPT
     btn_set_mppt = lv_btn_create(tab_settings);
     lv_obj_set_size(btn_set_mppt, 140, 35);
     lv_obj_align(btn_set_mppt, LV_ALIGN_TOP_RIGHT, -10, 195);
@@ -147,6 +202,7 @@ void init_gui(void) {
     lv_obj_add_event_cb(btn_set_mppt, role_mppt_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_add_flag(btn_set_mppt, LV_OBJ_FLAG_HIDDEN);
 
+    // Virtuellt tangentbord
     kb = lv_keyboard_create(tab_settings);
     lv_obj_set_size(kb, 440, 120);
     lv_obj_align(kb, LV_ALIGN_BOTTOM_MID, 0, 0);
@@ -155,8 +211,10 @@ void init_gui(void) {
     lv_obj_add_flag(kb, LV_OBJ_FLAG_HIDDEN);
 }
 
+// Uppdatera realtidsdata i gränssnittet (Kallas från loop() på Core 1)
 void update_gui_data(void) {
     if (xSemaphoreTake(dataMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
+        // 1. Uppdatera RuuviTag-etiketter
         if (globalData.ruuvi_updated) {
             char buf[32];
             snprintf(buf, sizeof(buf), "Temp: %.2f °C", globalData.ruuvi_temp);
@@ -165,21 +223,24 @@ void update_gui_data(void) {
             lv_label_set_text(lbl_ruuvi_hum, buf);
         }
 
+        // 2. Uppdatera samlade Victron-etiketter
         if (globalData.victron_updated) {
-            char buf[32];
+            char buf[64];
             snprintf(buf, sizeof(buf), "Spänning: %.2f V", globalData.victron_voltage);
             lv_label_set_text(lbl_victron_volt, buf);
             snprintf(buf, sizeof(buf), "Ström: %.1f A", globalData.victron_current);
             lv_label_set_text(lbl_victron_curr, buf);
             
+            // Om SoC är giltigt (kommer från Shunt) visar vi det, annars döljer vi för MPPT
             if(globalData.victron_soc > 0.0) {
                 snprintf(buf, sizeof(buf), "Batterinivå: %.1f %%", globalData.victron_soc);
                 lv_label_set_text(lbl_victron_soc, buf);
             } else {
-                lv_label_set_text(lbl_victron_soc, "Batterinivå: -- % (MPPT)");
+                lv_label_set_text(lbl_victron_soc, "Batterinivå: -- % (MPPT-aktiv)");
             }
         }
 
+        // 3. Lägg till nyupptäckta BLE MAC-adresser i Inställningslistan
         if (!globalData.discovered_macs.empty()) {
             for (const auto& mac : globalData.discovered_macs) {
                 bool exists = false;
@@ -198,7 +259,7 @@ void update_gui_data(void) {
                     lv_obj_add_event_cb(btn, device_click_cb, LV_EVENT_CLICKED, NULL);
                 }
             }
-            globalData.discovered_macs.clear();
+            globalData.discovered_macs.clear(); // Töm tillfälliga kön efter utritning
         }
         xSemaphoreGive(dataMutex);
     }
