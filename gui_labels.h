@@ -3,6 +3,7 @@
 #include <map>
 #include <string>
 #include "ble_processor.h"
+#include <Preferences.h>
 
 // Externa variabler deklarerade i huvudfilen
 extern SensorData globalData;
@@ -32,13 +33,33 @@ static void kb_event_cb(lv_event_t * e) {
     if(code == LV_EVENT_READY || code == LV_EVENT_CANCEL) {
         if(code == LV_EVENT_READY && !selected_mac.empty()) {
             const char * key_str = lv_textarea_get_text(ta_key);
-            if(strlen(key_str) == 32) { // En giltig Victron Bindkey är alltid 32 tecken
+            
+            // En giltig Victron Bindkey är alltid exakt 32 tecken lång
+            if(strlen(key_str) == 32) { 
                 if(xSemaphoreTake(dataMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+                    // 1. Spara i det aktiva RAM-minnet (vår std::map)
                     victronKeys[selected_mac] = std::string(key_str);
                     xSemaphoreGive(dataMutex);
+                    
+                    // 2. Spara permanent i flashminnet (NVS)
+                    Preferences prefs;
+                    prefs.begin("victron-keys", false); // false = skrivläge
+                    
+                    // Vi använder MAC-adressen som unik nyckel i flashminnet.
+                    // Preferences tillåter max 15 tecken som nyckelnamn, så vi rensar bort kolon
+                    std::string short_mac = selected_mac;
+                    short_mac.erase(std::remove(short_mac.begin(), short_mac.end(), ':'), short_mac.end());
+                    if(short_mac.length() > 15) short_mac = short_mac.substr(short_mac.length() - 15);
+                    
+                    prefs.putString(short_mac.c_str(), key_str);
+                    prefs.end();
+                    
+                    USBSerial.print("Nyckel sparad i flash för enhet: ");
+                    USBSerial.println(selected_mac.c_str());
                 }
             }
         }
+        // Göm tangentbordet och textrutan igen
         lv_obj_add_flag(kb, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(ta_key, LV_OBJ_FLAG_HIDDEN);
     }
